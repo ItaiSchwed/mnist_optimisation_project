@@ -5,14 +5,21 @@ import numpy as np
 
 
 class Population:
-    population: pd.DataFrame
-    involving_counter: int
+    __population: pd.DataFrame
+    __evolution_counter: int
 
     def __init__(self):
-        self.random_initialize_population()
-        self.involving_counter = 0
+        self.__random_initialize_population()
+        self.__evolution_counter = 0
 
-    def random_initialize_population(self):
+    @staticmethod
+    def get_population_columns_names():
+        return ['budget',
+                'leading_actor_count',
+                'oscar_avg_per_actor',
+                'movie_length']
+
+    def __random_initialize_population(self):
         self.population = (pd.DataFrame(np.random.random((50, 5)))
                            .apply(lambda chromosome:
                                   pd.Series([
@@ -30,8 +37,12 @@ class Population:
                                   )
                            )
         for index, row in self.population.iterrows():
-            self.population.loc[index, 'fitness_value'] = self.fitness(row)
+            self.population.loc[index, 'fitness_value'] = Population.fitness(row)
         return
+
+    @staticmethod
+    def fitness(offspring: pd.Series):
+        return 1 / offspring.mean()
 
     def steady_state_replace(self, new_offsprings: pd.DataFrame):
         new_offsprings = new_offsprings.sort_values('fitness_value').assign(new=True)
@@ -53,11 +64,14 @@ class Population:
                                                                               'oscar_avg_per_actor',
                                                                               'movie_length']]
         if largest_2_offsprings.apply(lambda row: row.loc['new'], axis=1).any():
-            self.involving_counter = 0
+            self.__evolution_counter = 0
         else:
-            self.involving_counter += 1
+            self.__evolution_counter += 1
 
-    def choose_2_parents(self):
+    def get_population_min_fitness(self):
+        return self.population.loc[:, 'fitness_value'].min()
+
+    def roulette_wheel_select_2_parents(self):
         sum_of_finesses = (self.population
                            .apply(lambda chromosome: chromosome['fitness_value'], axis=1)
                            .sum())
@@ -66,25 +80,11 @@ class Population:
 
     def __roulette_wheel_select_parent(self, sum_of_finesses):
         random_number = random.uniform(0, sum_of_finesses)
-        a = 7
         for index, chromosome in self.population.iterrows():
             random_number -= chromosome['fitness_value']
             if random_number <= 0:
                 return chromosome
         raise ValueError('Internal error')
 
-    @staticmethod
-    def fitness(off_spring: pd.Series):
-        return 1 / off_spring.loc['budget']
-
-
-population = Population()
-# new_offsprings = pd.DataFrame({
-#     'fitness_value': [1/8, 1/6],
-#     'budget': [8, 6],
-#     'leading_actor_count': [2, 3],
-#     'oscar_avg_per_actor': [0.1, 0.2],
-#     'movie_length': [3000000, 300000]})
-# population.steady_state_replace(new_offsprings)
-a = population.choose_2_parents()
-b = 7
+    def termination_condition(self):
+        return self.__evolution_counter >= 50
