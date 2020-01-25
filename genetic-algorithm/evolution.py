@@ -15,7 +15,6 @@ class Evolution:
     def create_new_generation(self):
         new_offsprings = self.uniform_crossover()
         self.population.steady_state_replace(self.random_resetting_mutations(new_offsprings))
-        return self.population.get_population_min_fitness()
 
     def uniform_crossover(self):
         parent1, parent2 = self.population.roulette_wheel_select_2_parents()
@@ -34,11 +33,15 @@ class Evolution:
                 offsprings.loc[index, :] = Evolution.__perform_mutation(offspring)
         return offsprings
 
+    def get_population_max_fitness(self):
+        return self.population.get_population_max_fitness()
+
     @staticmethod
     def __perform_mutation(offspring: pd.Series):
         gen_index = random.randint(0, offspring.count() - 1)
         mutation = random.uniform(0, 10)
         offspring[gen_index] = mutation
+        offspring['fitness_value'] = Population.fitness(offspring)
         return offspring
 
     def termination_condition(self):

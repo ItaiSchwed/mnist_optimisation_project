@@ -24,10 +24,10 @@ class Population:
                            .apply(lambda chromosome:
                                   pd.Series([
                                       chromosome[0],
-                                      chromosome[1] * 10,
-                                      chromosome[2] * 10,
-                                      chromosome[3] * 10,
-                                      chromosome[4] * 10],
+                                      chromosome[1],
+                                      chromosome[2],
+                                      chromosome[3],
+                                      chromosome[4]],
                                       index=['fitness_value',
                                              'budget',
                                              'leading_actor_count',
@@ -42,20 +42,23 @@ class Population:
 
     @staticmethod
     def fitness(offspring: pd.Series):
-        return 1 / offspring.mean()
+        x = 5
+        y = 9
+        return y / (pow((offspring[Population.get_population_columns_names()].mean() - x), 2) + 1)
 
     def steady_state_replace(self, new_offsprings: pd.DataFrame):
         new_offsprings = new_offsprings.sort_values('fitness_value').assign(new=True)
         population_2_smallest = (self.population.nsmallest(2, 'fitness_value')
                                  .reset_index())
         indexes = population_2_smallest.loc[:, 'index'].values
-        largest_2_offsprings = (new_offsprings
-                                .append(population_2_smallest[
-                                            ['fitness_value',
-                                             'budget',
-                                             'leading_actor_count',
-                                             'oscar_avg_per_actor',
-                                             'movie_length']].assign(new=False))
+        largest_2_offsprings = (population_2_smallest[
+                                    ['fitness_value',
+                                     'budget',
+                                     'leading_actor_count',
+                                     'oscar_avg_per_actor',
+                                     'movie_length']].assign(new=False)
+                                .append(new_offsprings,
+                                        sort=False)
                                 .nlargest(2, 'fitness_value').set_index(keys=indexes))
         for index in indexes:
             self.population.loc[index] = largest_2_offsprings.loc[index].loc[['fitness_value',
@@ -68,8 +71,8 @@ class Population:
         else:
             self.__evolution_counter += 1
 
-    def get_population_min_fitness(self):
-        return self.population.loc[:, 'fitness_value'].min()
+    def get_population_max_fitness(self):
+        return self.population.nlargest(1, 'fitness_value').iloc[0]
 
     def roulette_wheel_select_2_parents(self):
         sum_of_finesses = (self.population
@@ -87,4 +90,4 @@ class Population:
         raise ValueError('Internal error')
 
     def termination_condition(self):
-        return self.__evolution_counter >= 50
+        return self.__evolution_counter >= 100
