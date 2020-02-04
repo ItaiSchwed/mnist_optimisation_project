@@ -123,4 +123,4 @@ dmypy.json
 .pyre/
 
 # My files
-genetic-algorithm/.idea/*
+.idea/
