@@ -9,6 +9,11 @@ class Face(Enum):
     b = 4
     d = 5
 
+    def __sub__(self, other):
+        if self.name == other.name:
+            return 1
+        return 0
+
 
 class Action(Enum):
     f = 1
@@ -23,6 +28,7 @@ class Action(Enum):
     T = 10
     d = 11
     D = 12
+    freeze = 13
 
 
 class Columns(Enum):
