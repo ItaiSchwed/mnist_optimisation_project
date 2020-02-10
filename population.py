@@ -1,13 +1,11 @@
 import torch
 
-import settings
-from settings import np
-from models import MnistModel, FashionMnistModel
+from settingsModule import Settings, np
 
 
+# The Population of the GA
 class Population:
-	__evolution_counter: int
-
+	settings: Settings
 	population_pics: np.array
 	population_fitnesses: np.array
 	population_certainties: np.array
@@ -15,29 +13,29 @@ class Population:
 	network: torch.nn.Module
 	penalty_factor: float
 	population_size: float
-	with_penalty: bool
+	stuck_evolution_counter: int
 
-	def __init__(self):
-		if settings.MODEL == settings.MODELS.MNIST:
-			self.network = MnistModel()
-		elif settings.MODEL == settings.MODELS.FASHION_MNIST:
-			self.network = FashionMnistModel()
-		else:
-			print("Illegal Model!")
-			exit()
-
-		network_state_dict = torch.load(settings.MODEL_NAME)
-		self.network.load_state_dict(network_state_dict)
+	def __init__(self, settings:Settings):
+		self.settings = settings
+		self.network = settings.network
 		self.network.eval()
 
-		self.population_size = settings.POPULATION_SIZE
-		self.penalty_factor = settings.PENALTY_FACTOR
-		self.with_penalty = settings.WITH_PENALTY
-		self.__random_initialize_population()
-		self.__evolution_counter = 0
+		self.population_size = settings.population_size
+		self.penalty_factor = settings.penalty_factor
+		self.random_initialize_population()
+		self.stuck_evolution_counter = 0
 
-	def __random_initialize_population(self):
-		self.population_pics = np.random.random_integers(0, settings.NUM_OF_COLORS-1, (self.population_size, settings.PICTURE_SIZE, settings.PICTURE_SIZE)) / (settings.NUM_OF_COLORS-1)
+	def random_initialize_population(self):
+		self.population_pics = np.random.random_integers(0, self.settings.num_of_shades - 1,
+														 (self.population_size, self.settings.num_of_layers,
+														  self.settings.picture_size, self.settings.picture_size)) \
+							   / (self.settings.num_of_shades-1)
+
+		# Black-White when the picture has 3 layers
+		#for picture_idx in range(int(self.population_size)):
+		#	self.population_pics[picture_idx, 1, :, :] = self.population_pics[picture_idx, 0, :, :]
+		#	self.population_pics[picture_idx, 2, :, :] = self.population_pics[picture_idx, 0, :, :]
+
 		self.population_fitnesses = np.random.random(self.population_size)
 		self.population_certainties = np.random.random(self.population_size)
 		self.population_penalties = np.random.random(self.population_size)
@@ -53,31 +51,32 @@ class Population:
 
 	def certainty(self, offspring: np.array):
 		with torch.no_grad():
-			network_input = torch.Tensor(offspring).unsqueeze(dim=0).unsqueeze(dim=0) # Expending the array (one example, one kernel)
+			network_input = torch.Tensor(offspring).unsqueeze(dim=0) # Expending the array (one example)
 			network_output = self.network(network_input)
+			certainty = torch.nn.functional.softmax(network_output, dim=1)
 
-			return network_output[0][settings.LABEL_NUM]
+			return certainty[0][self.settings.label_num]
 
 	def penalty(self, offspring: np.array):
-		# The penalty will be the distances between every two adjacent pixels in the picture
+		# The penalty is defined by the distances between every two adjacent pixels in the picture
 		penalty = 0
 
 		# Avoiding penalty computation when possible
-		if self.with_penalty:
+		if self.penalty_factor != 0:
 			row_neighbors = np.copy(offspring)
-			row_neighbors[1:, :] = offspring[:-1, :]
+			row_neighbors[:, 1:, :] = offspring[:, :-1, :]
 
 			col_neighbors = np.copy(offspring)
-			col_neighbors[:, 1:] = offspring[:, :-1]
+			col_neighbors[:, :, 1:] = offspring[:, :, :-1]
 
 			#penalty = np.sum(np.sqrt(np.abs(offspring - row_neighbors)) + np.sqrt(np.abs(offspring - col_neighbors)))
 			penalty = np.sum(np.abs(offspring - row_neighbors) + np.abs(offspring - col_neighbors))
-			penalty /= pow(settings.PICTURE_SIZE, 2)
+			penalty /= pow(self.settings.picture_size, 2)
 
 		return penalty
 
 	def fitness(self, certainty, penalty):
-		if self.with_penalty:
+		if self.penalty_factor != 0:
 			fitness = certainty - self.penalty_factor*penalty
 		else:
 			fitness = certainty
@@ -90,9 +89,9 @@ class Population:
 		second_offspring_changed = self.steady_state_replace_one_offspring(offsprings_pics[1])
 
 		if not first_offspring_changed and not second_offspring_changed:
-			self.__evolution_counter += 1
+			self.stuck_evolution_counter += 1
 		else:
-			self.__evolution_counter = 0
+			self.stuck_evolution_counter = 0
 
 	def steady_state_replace_one_offspring(self, offspring_pic: np.array):
 		min_fitness_idx = np.argmin(self.population_fitnesses)
@@ -111,28 +110,25 @@ class Population:
 			return True
 
 
-	def get_population_max_fitness(self):
-		return np.max(self.population_fitnesses)
+	def get_population_best(self):
+		best_fitness_idx = np.argmax(self.population_fitnesses)
+		return {'fitness': np.max(self.population_fitnesses),
+				'certainty': self.population_certainties[best_fitness_idx],
+				'penalty': self.population_penalties[best_fitness_idx],
+				'pic': self.population_pics[best_fitness_idx]}
 
-	def get_population_min_fitness(self):
-		return np.min(self.population_fitnesses)
+	def get_population_wrost(self):
+		wrost_fitness_idx = np.argmin(self.population_fitnesses)
+		return {'fitness': np.min(self.population_fitnesses),
+				'certainty': self.population_certainties[wrost_fitness_idx],
+				'penalty': self.population_penalties[wrost_fitness_idx],
+				'pic': self.population_pics[wrost_fitness_idx]}
 
-	def get_population_best_pic(self):
-		return self.population_pics[np.argmax(self.population_fitnesses)]
-
-	def get_certainty_of_max_fitness(self):
-		return self.population_certainties[np.argmax(self.population_fitnesses)]
-
-	def get_penalty_of_max_fitness(self):
-		return self.population_penalties[np.argmax(self.population_fitnesses)]
-
+	def get_evolution_counter(self):
+		return self.stuck_evolution_counter
 
 	def roulette_wheel_select_2_parents(self):
 		sum_of_fitnesses = np.sum(np.abs(self.population_fitnesses))
 		relative_fitness = np.abs(self.population_fitnesses) / sum_of_fitnesses
 		selected_parents_indexes = np.random.choice(range(len(self.population_pics)), p=relative_fitness, size=2, replace=False)
 		return self.population_pics[selected_parents_indexes[0]], self.population_pics[selected_parents_indexes[1]]
-
-
-	def termination_condition(self):
-		return self.__evolution_counter >= 100

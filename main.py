@@ -1,70 +1,72 @@
-import torch
 from matplotlib import pyplot as plt
 from matplotlib import animation
 
 import settingsModule
-from evolution import Evolution
 from settingsModule import Settings, np
+from algorithms import Algorithm, GeneticAlgorithm, GreedyAlgorithm
 
 
-class GeneticAlgorithm:
+# Generating the best suitable input for the network according to the given settings
+class TransparentGenerator:
 	settings: Settings
-	evolution: Evolution
-	last_max_fitness: float
-	generation_number: int
+	algorithm: Algorithm
+	last_best_fitness: float
 
 	graph_x = []
 	graph_y = []
 
-	def __init__(self, settings: Settings):
+	def __init__(self, algorithm_class, settings: Settings):
 		self.settings = settings
-		self.evolution = Evolution(settings)
-		self.evolution.create_new_generation()
-		self.last_max_fitness = 0.0
-		self.generation_number = 0
+		self.algorithm = algorithm_class(settings)
+		self.last_best_fitness = -np.inf # invalid fitness value as the initial last one
 
-		# Show a picture over time
-		if self.settings.DISPLAY == settingsModule.DISPLAYS.PICTURE_ONLY:
+		# Print in command line (standard output)
+		if self.settings.DISPLAY == settingsModule.DISPLAYS.COMMAND_LINE:
+			while not self.algorithm.termination_condition():
+				self.algorithm.iterate()
+
+				if self.algorithm.iteration_num % self.settings.status_period == 0:
+					print(self.algorithm.get_progress_status())
+
+				self.algorithm.iteration_num += 1
+
 			fig = plt.figure()
 			fig.subplots_adjust(top=0.8)
-			fig.suptitle('Genetic Algorithm- Transparent Generator', fontsize=12, fontweight='bold')
+			fig.suptitle('Transparent Generator- ' + self.algorithm.get_algorithm_name(), fontsize=12, fontweight='bold')
+			img = fig.add_subplot(1, 1, 1)
+			img.axis("off")
+			img.title(self.algorithm.get_picture_title())
+
+			if settings.num_of_layers == 1:
+				img.imshow(self.algorithm.get_best_picture()[0], cmap='gray', interpolation='none')
+			else:  # 3 layers
+				img.imshow(np.swapaxes(self.algorithm.get_best_picture(), 0, 2), interpolation='none')
+
+			plt.savefig(self.settings.RESULTS_PATH)
+
+		# Show a picture over time
+		elif self.settings.DISPLAY == settingsModule.DISPLAYS.PICTURE_ONLY:
+			fig = plt.figure()
+			fig.subplots_adjust(top=0.8)
+			fig.suptitle('Transparent Generator- ' + self.algorithm.get_algorithm_name(), fontsize=12, fontweight='bold')
 			self.img = fig.add_subplot(1, 1, 1)
 			self.img.axis("off")
 			self.animation = animation.FuncAnimation(fig, self.animate_only_picture, interval=1)
 			plt.show()
 
-		# Print in command line (standard output)
-		elif self.settings.DISPLAY == settingsModule.DISPLAYS.COMMAND_LINE:
-			while not self.evolution.termination_condition():
-				self.evolution.create_new_generation()
-
-				self.generation_number += 1
-				if self.generation_number % self.settings.STATUS_PERIOD == 0:
-					print(self.get_progress_status())
-
-					if self.evolution.get_population_best()['certainty'] > 0.99:
-						if settings.num_of_layers == 1:
-							self.img.imshow(self.evolution.get_population_best()['pic'][0], cmap='gray',
-											interpolation='none')
-						else:
-							self.img.imshow(self.evolution.get_population_best()['pic'], interpolation='none')
-						plt.show()
-
 		# Show a progress graph
 		elif self.settings.DISPLAY == settingsModule.DISPLAYS.GRAPH:
 			fig = plt.figure(figsize=(15, 7))
-			fig.suptitle('MNIST- Genetic Algorithm', fontsize=12, fontweight='bold')
+			fig.suptitle('Transparent Generator- ' + self.algorithm.get_algorithm_name(), fontsize=12, fontweight='bold')
 			self.graph = fig.add_subplot(1, 2, 1)
-			self.graph.set_xlabel("Number of Cross-Overs")
+			self.graph.set_xlabel("Number of Generations")
 			self.graph.set_ylabel("Fitness")
 			self.img = fig.add_subplot(1, 2, 2)
 			self.img.axis("off")
 
 			fig.subplots_adjust(top=0.87)
 			self.line, = self.graph.plot([], [], lw=2)
-
-			self.animation = animation.FuncAnimation(fig, self.animate_graph, init_func=self.init, interval=1,
-													 blit=True)
+			self.animation = animation.FuncAnimation(fig, self.animate_graph, init_func=self.init, interval=1, blit=True)
 			plt.show()
 
 		else:
@@ -72,58 +74,62 @@ class GeneticAlgorithm:
 			exit()
 
 	def animate_only_picture(self, i):
-		self.evolution.create_new_generation()
+		if self.algorithm.iteration_num != 0:
+			self.algorithm.iterate()
 
-		if self.generation_number % self.settings.STATUS_PERIOD == 0:
-			print(self.get_progress_status())
+		if self.algorithm.iteration_num % self.settings.status_period == 0:
+			print(self.algorithm.get_progress_status())
 
-			if self.evolution.get_population_best()['fitness'] != self.last_max_fitness:
-				self.last_max_fitness = self.evolution.get_population_best()['fitness']
-				self.img.set_title(self.get_picture_title())
+			if self.algorithm.get_best_fitness() != self.last_best_fitness:
+				self.img.set_title(self.algorithm.get_picture_title())
+				self.last_best_fitness = self.algorithm.get_best_fitness()
 
 				if self.settings.num_of_layers == 1:
-					self.img.imshow(self.evolution.get_population_best()['pic'][0], cmap='gray', interpolation='none')
-				else:
-					self.img.imshow(np.swapaxes(self.evolution.get_population_best()['pic'], 0, 2), interpolation='none')
+					self.img.imshow(self.algorithm.get_best_picture()[0], cmap='gray', interpolation='none')
+				else: # 3 layers
+					self.img.imshow(np.swapaxes(self.algorithm.get_best_picture(), 0, 2), interpolation='none')
 
 				plt.savefig(self.settings.RESULTS_PATH)
 
-			if self.evolution.termination_condition():
+			if self.algorithm.termination_condition():
 				self.animation.event_source.stop()
 
-		self.generation_number += 1
+		self.algorithm.iteration_num += 1
 
 	def init(self):
 		self.line.set_data([], [])
 		return self.line,
 
 	def animate_graph(self, i):
-		self.evolution.create_new_generation()
+		if self.algorithm.iteration_num != 0:
+			self.algorithm.iterate()
 
 		self.graph_x.append(i)
-		self.graph_y.append(self.evolution.get_population_best()['fitness'])
+		self.graph_y.append(self.algorithm.get_best_fitness())
 		self.reset_plot_bounds()
 
-		if self.generation_number % self.settings.STATUS_PERIOD == 0:
-			print(self.get_progress_status())
+		if self.algorithm.iteration_num % self.settings.status_period == 0:
+			print(self.algorithm.get_progress_status())
 
 			self.line.set_data(self.graph_x, self.graph_y)
 			self.graph.figure.canvas.draw()
 
-			if self.evolution.get_population_best()['fitness'] != self.last_max_fitness:
-				self.last_max_fitness = self.evolution.get_population_best()['fitness']
-				self.img.set_title(self.get_picture_title())
+			# Update image only if the best fitness was changed
+			if self.algorithm.get_best_fitness() != self.last_best_fitness:
+				self.img.set_title(self.algorithm.get_picture_title())
+				self.last_best_fitness = self.algorithm.get_best_fitness()
+
 				if self.settings.num_of_layers == 1:
-					self.img.imshow(self.evolution.get_population_best()['pic'][0], cmap='gray', interpolation='none')
-				else:
-					self.img.imshow(self.evolution.get_population_best()['pic'], interpolation='none')
+					self.img.imshow(self.algorithm.get_best_picture()[0], cmap='gray', interpolation='none')
+				else:  # 3 layers
+					self.img.imshow(np.swapaxes(self.algorithm.get_best_picture(), 0, 2), interpolation='none')
 
 				plt.savefig(self.settings.RESULTS_PATH)
 
-			if self.evolution.termination_condition():
+			if self.algorithm.termination_condition():
 				self.animation.event_source.stop()
 
-		self.generation_number += 1
+		self.algorithm.iteration_num += 1
 
 		return self.line,
 
@@ -136,62 +142,59 @@ class GeneticAlgorithm:
 		if self.graph_y[len(self.graph_y) - 1] >= y_max:
 			self.graph.set_ylim(0, 2 * y_max)
 
-	def get_picture_title(self):
-		title = f"GEN:{self.generation_number}, Label:{self.settings.label}\n"
+def main():
+	import sys
 
-		if self.settings.penalty_factor != 0:
-			return title + "Certainty:{0:.2f}%".format(round(self.evolution.get_population_best()['certainty']*100, 2)) +\
-				   ", Penalty:{0:.4f}".format(round(self.evolution.get_population_best()['penalty'], 4)) + \
-				   ", Fitness:{0:.4f}".format(round(self.evolution.get_population_best()['fitness'], 4))
+	model = settingsModule.MODELS.MNIST
+	cross_over = settingsModule.CROSS_OVERS.UNIFORM
+	mutation = settingsModule.MUTATIONS.INDIVIDUAL_PER_OFFSPRING
+	mutation_probability = 0.7  # 0.01
+	penalty_factor = 0.1
+	population_size = 50
+	num_of_shades = 256 # 2
+	algorithm = Algorithm
+	status_period = 1
+
+	if len(sys.argv) == 2 and sys.argv[1] == "-all":
+		for algorithm_type in settingsModule.ALGORITHMS:
+			if algorithm_type == settingsModule.ALGORITHMS.GA:
+				algorithm = GeneticAlgorithm
+				status_period = 1000
+			elif algorithm_type == settingsModule.ALGORITHMS.GREEDY:
+				algorithm = GreedyAlgorithm
+				status_period = 1
+			else:
+				print("Illegal Algorithm!")
+				exit()
+
+			for label_num in range(10):
+				settings = Settings(algorithm_type=algorithm_type, model=model, label_num=label_num,
+									cross_over=cross_over, mutation=mutation, mutation_probability=mutation_probability,
+									penalty_factor=penalty_factor, population_size=population_size, num_of_shades=num_of_shades,
+									status_period=status_period)
+
+				TransparentGenerator(algorithm, settings)
+
+	else:
+		algorithm_type = settingsModule.ALGORITHMS.GA
+		label_num = 0
+
+		if algorithm_type == settingsModule.ALGORITHMS.GA:
+			algorithm = GeneticAlgorithm
+			status_period = 1000
+		elif algorithm_type == settingsModule.ALGORITHMS.GREEDY:
+			algorithm = GreedyAlgorithm
+			status_period = 1
 		else:
-			return title + "Fitness:{0:.2f}%".format(round(self.evolution.get_population_best()['fitness']*100, 2))
+			print("Illegal Algorithm!")
+			exit()
 
-	def get_progress_status(self):
-		status = f"GEN:{self.generation_number}, Label:{self.settings.label} | BEST("
+		settings = Settings(algorithm_type=algorithm_type, model=model, label_num=label_num,
+							cross_over=cross_over, mutation=mutation, mutation_probability=mutation_probability,
+							penalty_factor=penalty_factor, population_size=population_size, num_of_shades=num_of_shades,
+							status_period=status_period)
 
-		if self.settings.penalty_factor != 0:
-			status += "Certainty:{0:.4f}".format(round(self.evolution.get_population_best()['certainty'], 4)) + \
-				   ", Penalty:{0:.4f}".format(round(self.evolution.get_population_best()['penalty'], 4)) + \
-				   ", Fitness:{0:.4f}".format(round(self.evolution.get_population_best()['fitness'], 4))
-		else:
-			status += "Fitness:{0:.4f}".format(round(self.evolution.get_population_best()['fitness'], 4))
+		TransparentGenerator(algorithm, settings)
 
-		status += ") | Worst(Fitness:{0:.4f})".format(round(self.evolution.get_population_wrost()['fitness'], 4))
-		return status
-
-class GreedyAlgorithm:
-	def greedy_optimization(self):
-		pic = np.random.random_integers(0, self.settings.num_of_shades - 1,
-										(self.settings.num_of_layers, self.settings.picture_size, self.settings.picture_size)) \
-			  / (self.settings.num_of_shades - 1)
-
-		max_fitness = 0
-		last_max_fitness = -1
-		while last_max_fitness != max_fitness:
-			last_max_fitness = max_fitness
-
-			for i in range(pic.shape[1]):
-				for j in range(pic.shape[2]):
-					max_fitness_shade = pic[0][i][j]
-
-					for shade in range(self.settings.num_of_shades):
-						pic[0][i][j] = shade / (self.settings.num_of_shades - 1)
-						fitness = self.certainty(pic)
-						if fitness > max_fitness:
-							max_fitness = fitness
-							max_fitness_shade = shade / (self.settings.num_of_shades - 1)
-
-					pic[0][i][j] = max_fitness_shade
-					print(last_max_fitness==max_fitness, i, j, max_fitness)
-
-		plt.imshow(pic[0], cmap='gray', interpolation='none')
-		plt.axis("off")
-		plt.savefig(self.settings.RESULTS_PATH)
-
-	def certainty(self, pic: np.array):
-		with torch.no_grad():
-			network_input = torch.Tensor(pic).unsqueeze(dim=0)  # Expending the array (one example)
-			network_output = self.settings.network(network_input)
-			certainty = torch.nn.functional.softmax(network_output, dim=1)
-
-			return certainty[0][self.settings.label_num]
+if __name__ == "__main__":
+	main()
