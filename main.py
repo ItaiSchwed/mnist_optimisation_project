@@ -167,7 +167,11 @@ def main():
 				print("Illegal Algorithm!")
 				exit()
 
-			for label_num in range(10):
+			num_of_labels = 10
+			if model == settingsModule.MODELS.DOGS_CATS:
+				num_of_labels = 2
+
+			for label_num in range(num_of_labels):
 				settings = Settings(algorithm_type=algorithm_type, model=model, label_num=label_num,
 									cross_over=cross_over, mutation=mutation, mutation_probability=mutation_probability,
 									penalty_factor=penalty_factor, population_size=population_size, num_of_shades=num_of_shades,
