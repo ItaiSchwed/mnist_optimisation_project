@@ -4,21 +4,48 @@ import settingsModule
 from settingsModule import Settings, np, random
 from population import Population
 
-
-
-class GeneticAlgorithm:
+# Parent of all algorithms
+class Algorithm:
+	iteration_num: int
 	settings: Settings
-	population: Population
-	mutation_probability: float
-	generation_number: int
 
 	def __init__(self, settings: Settings):
 		self.settings = settings
+		self.iteration_num = 0
+
+	def iterate(self) -> None:
+		pass
+
+	def get_algorithm_name(self) -> str:
+		pass
+
+	def get_picture_title(self) -> str:
+		pass
+
+	def get_progress_status(self) -> str:
+		pass
+
+	def get_best_picture(self) -> np.array:
+		pass
+
+	def get_best_fitness(self) -> float:
+		pass
+
+	def termination_condition(self) -> bool:
+		pass
+
+
+# Genetic Algorithm
+class GeneticAlgorithm(Algorithm):
+	population: Population
+	mutation_probability: float
+
+	def __init__(self, settings: Settings):
+		super().__init__(settings)
 		self.mutation_probability = self.settings.mutation_probability
 		self.population = Population(settings)
-		self.generation_number = 0
 
-	def create_new_generation(self):
+	def iterate(self):
 		if self.settings.cross_over == settingsModule.CROSS_OVERS.ONE_POINT:
 			offsprings = self.one_point_crossover()
 		elif self.settings.cross_over == settingsModule.CROSS_OVERS.TWO_POINT:
@@ -30,7 +57,6 @@ class GeneticAlgorithm:
 			exit()
 
 		self.population.steady_state_replace(self.random_mutations(offsprings))
-		self.generation_number += 1
 
 	def one_point_crossover(self):
 		parent1, parent2 = self.population.roulette_wheel_select_2_parents()
@@ -110,11 +136,11 @@ class GeneticAlgorithm:
 		return self.population.get_population_wrost()
 
 
-	def get_iteration_num(self):
-		return self.generation_number
+	def get_algorithm_name(self):
+		return "Genetic Algorithm"
 
 	def get_picture_title(self):
-		title = f"GEN:{self.generation_number}, Label:{self.settings.label}\n"
+		title = f"Generation:{self.iteration_num}, Label:{self.settings.label}\n"
 
 		if self.settings.penalty_factor != 0:
 			return title + "Certainty:{0:.2f}%".format(round(self.get_population_best()['certainty']*100, 2)) +\
@@ -124,7 +150,7 @@ class GeneticAlgorithm:
 			return title + "Fitness:{0:.2f}%".format(round(self.get_population_best()['fitness']*100, 2))
 
 	def get_progress_status(self):
-		status = f"GEN:{self.generation_number}, Label:{self.settings.label} | BEST("
+		status = f"Algorithm:GA, Model:{self.settings.model.name}, Generation:{self.iteration_num}, Label:{self.settings.label} | BEST("
 
 		if self.settings.penalty_factor != 0:
 			status += "Certainty:{0:.4f}".format(round(self.get_population_best()['certainty'], 4)) + \
@@ -136,37 +162,43 @@ class GeneticAlgorithm:
 		status += ") | Worst(Fitness:{0:.4f})".format(round(self.get_population_wrost()['fitness'], 4))
 		return status
 
+	def get_best_picture(self):
+		return self.get_population_best()['pic']
+
+	def get_best_fitness(self):
+		return self.get_population_best()['fitness']
+
 	def termination_condition(self):
-		return self.population.termination_condition()
+		return self.population.get_evolution_counter() >= 100 or self.get_population_best()['certainty'] >= 0.99
 
-class GreedyAlgorithm:
-	settings: Settings
 
-	def __int__(self, settings: Settings):
-		self.settings = settings
+# Greedy Algorithm
+class GreedyAlgorithm(Algorithm):
+	pic: np.array
+	max_fitness: float
+	last_max_fitness: float
 
-		pic = np.random.random_integers(0, self.settings.num_of_shades - 1,
+	def __init__(self, settings: Settings):
+		super().__init__(settings)
+		self.pic = np.random.random_integers(0, self.settings.num_of_shades - 1,
 										(self.settings.num_of_layers, self.settings.picture_size, self.settings.picture_size)) \
-			  / (self.settings.num_of_shades - 1)
+				   / (self.settings.num_of_shades - 1)
+		self.max_fitness = self.certainty(self.pic)
+		self.last_max_fitness = 0.0
 
-		max_fitness = 0
-		last_max_fitness = -1
-		while last_max_fitness != max_fitness:
-			last_max_fitness = max_fitness
+	def iterate(self):
+		for i in range(self.pic.shape[1]):
+			for j in range(self.pic.shape[2]):
+				max_fitness_shade = self.pic[0][i][j]
 
-			for i in range(pic.shape[1]):
-				for j in range(pic.shape[2]):
-					max_fitness_shade = pic[0][i][j]
+				for shade in range(self.settings.num_of_shades):
+					self.pic[0][i][j] = shade / (self.settings.num_of_shades - 1)
+					fitness = self.certainty(self.pic)
+					if fitness > self.max_fitness:
+						self.max_fitness = fitness
+						max_fitness_shade = shade / (self.settings.num_of_shades - 1)
 
-					for shade in range(self.settings.num_of_shades):
-						pic[0][i][j] = shade / (self.settings.num_of_shades - 1)
-						fitness = self.certainty(pic)
-						if fitness > max_fitness:
-							max_fitness = fitness
-							max_fitness_shade = shade / (self.settings.num_of_shades - 1)
-
-					pic[0][i][j] = max_fitness_shade
-					print(last_max_fitness==max_fitness, i, j, max_fitness)
+				self.pic[0][i][j] = max_fitness_shade
 
 	def certainty(self, pic: np.array):
 		with torch.no_grad():
@@ -174,4 +206,25 @@ class GreedyAlgorithm:
 			network_output = self.settings.network(network_input)
 			certainty = torch.nn.functional.softmax(network_output, dim=1)
 
-			return certainty[0][self.settings.label_num]
+			return float(certainty[0][self.settings.label_num])
+
+	def get_algorithm_name(self):
+		return "Greedy Algorithm"
+
+	def get_picture_title(self):
+		title = f"Iteration:{self.iteration_num}, Label:{self.settings.label}\n"
+		return title + "Fitness:{0:.2f}%".format(round(self.max_fitness*100, 2))
+
+	def get_progress_status(self):
+		status = f"Algorithm:Greedy, Model:{self.settings.model.name}, Iteration:{self.iteration_num}, Label:{self.settings.label}" + \
+				 ", Fitness:{0:.4f}".format(round(self.max_fitness, 4))
+		return status
+
+	def get_best_picture(self):
+		return self.pic
+
+	def get_best_fitness(self):
+		return self.max_fitness
+
+	def termination_condition(self):
+		return self.last_max_fitness == self.max_fitness or self.max_fitness >= 0.99
