@@ -128,3 +128,4 @@ genetic-algorithm/.idea/*
 /movies
 trainingFashionMnist.py
 fashionmnist/
+results/
