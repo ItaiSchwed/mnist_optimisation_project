@@ -124,7 +124,7 @@ class Population:
 				'penalty': self.population_penalties[wrost_fitness_idx],
 				'pic': self.population_pics[wrost_fitness_idx]}
 
-	def get_evolution_counter(self):
+	def get_stuck_evolution_counter(self):
 		return self.stuck_evolution_counter
 
 	def roulette_wheel_select_2_parents(self):
