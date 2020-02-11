@@ -36,13 +36,17 @@ class Population:
 		#	self.population_pics[picture_idx, 1, :, :] = self.population_pics[picture_idx, 0, :, :]
 		#	self.population_pics[picture_idx, 2, :, :] = self.population_pics[picture_idx, 0, :, :]
 
+		# Starting with exact same color for all the picture in the same image
+		#for picture_idx in range(int(self.population_size)):
+		#	self.population_pics[picture_idx, :, :, :] = self.population_pics[picture_idx, :, 0, 0]
+
 		self.population_fitnesses = np.random.random(self.population_size)
 		self.population_certainties = np.random.random(self.population_size)
 		self.population_penalties = np.random.random(self.population_size)
 
 		for picture_idx in range(len(self.population_pics)):
-			certainty = self.certainty(self.population_pics[picture_idx])
 			penalty = self.penalty(self.population_pics[picture_idx])
+			certainty = self.certainty(self.population_pics[picture_idx])
 
 			self.population_certainties[picture_idx] = certainty
 			self.population_penalties[picture_idx] = penalty
@@ -61,6 +65,8 @@ class Population:
 		# The penalty is defined by the distances between every two adjacent pixels in the picture
 		penalty = 0
 
+		#offspring[0] = (offspring[0] > 0.5) + (offspring[0] > 0.5) * (offspring[0] - 1)
+
 		# Avoiding penalty computation when possible
 		if self.penalty_factor != 0:
 			row_neighbors = np.copy(offspring)
@@ -72,6 +78,21 @@ class Population:
 			#penalty = np.sum(np.sqrt(np.abs(offspring - row_neighbors)) + np.sqrt(np.abs(offspring - col_neighbors)))
 			penalty = np.sum(np.abs(offspring - row_neighbors) + np.abs(offspring - col_neighbors))
 			penalty /= pow(self.settings.picture_size, 2)
+
+			penalty += np.sum(offspring) / pow(self.settings.picture_size, 2)
+
+			# Trying other penalties
+			'''
+			true_color = (offspring < 0.5)[0]
+
+			for i in range(true_color.shape[0] - 2):
+				for j in range(true_color.shape[1] - 2):
+					curr = true_color[i + 1][j + 1]
+					if not(curr == true_color[i + 1][j] and curr == true_color[i][j + 1] and curr == true_color[i + 2][j + 1] and curr == true_color[i + 1][j + 2]):
+						penalty += 1
+
+			penalty /= pow(self.settings.picture_size, 2)
+			'''
 
 		return penalty
 
@@ -96,8 +117,8 @@ class Population:
 	def steady_state_replace_one_offspring(self, offspring_pic: np.array):
 		min_fitness_idx = np.argmin(self.population_fitnesses)
 
-		offspring_certainty = self.certainty(offspring_pic)
 		offspring_penalty = self.penalty(offspring_pic)
+		offspring_certainty = self.certainty(offspring_pic)
 		offspring_fitness = self.fitness(offspring_certainty, offspring_penalty)
 
 		if offspring_fitness < self.population_fitnesses[min_fitness_idx]:

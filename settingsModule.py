@@ -55,7 +55,7 @@ class Settings:
 	label: str
 	network: torch.nn.Module
 
-	RESULTS_PATH = "results/"
+	RESULTS_PATH = "results"
 	TRAINED_MODELS_PATH = "trainedModels/"  # The folder of the trained models
 	DISPLAY = DISPLAYS.PICTURE_ONLY
 
@@ -91,8 +91,8 @@ class Settings:
 			network_state_dict = torch.load(self.TRAINED_MODELS_PATH + "fashion-mnist-model-2", map_location=torch.device('cpu'))
 			self.network.load_state_dict(network_state_dict)
 
-			self.label = ["T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
-						  "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"][self.label_num]
+			self.label = ["T-shirt", "Trouser", "Pullover", "Dress", "Coat",
+						  "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"][self.label_num]
 			self.num_of_layers = 1
 			self.picture_size = 28
 

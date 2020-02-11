@@ -145,7 +145,7 @@ class TransparentGenerator:
 def main():
 	import sys
 
-	model = settingsModule.MODELS.MNIST
+	model = settingsModule.MODELS.FASHION_MNIST
 	cross_over = settingsModule.CROSS_OVERS.UNIFORM
 	mutation = settingsModule.MUTATIONS.INDIVIDUAL_PER_OFFSPRING
 	mutation_probability = 0.7  # 0.01

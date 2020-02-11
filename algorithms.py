@@ -169,7 +169,7 @@ class GeneticAlgorithm(Algorithm):
 		return self.get_population_best()['fitness']
 
 	def termination_condition(self):
-		return self.population.get_stuck_evolution_counter() >= 100 or self.get_population_best()['certainty'] >= 0.99
+		return self.population.get_stuck_evolution_counter() >= 100 or self.get_population_best()['fitness'] >= 0.99
 
 
 # Greedy Algorithm
