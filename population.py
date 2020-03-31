@@ -79,7 +79,7 @@ class Population:
 			penalty = np.sum(np.abs(offspring - row_neighbors) + np.abs(offspring - col_neighbors))
 			penalty /= pow(self.settings.picture_size, 2)
 
-			penalty += np.sum(offspring) / pow(self.settings.picture_size, 2)
+			#penalty += np.sum(offspring) / pow(self.settings.picture_size, 2)
 
 			# Trying other penalties
 			'''
@@ -98,7 +98,7 @@ class Population:
 
 	def fitness(self, certainty, penalty):
 		if self.penalty_factor != 0:
-			fitness = certainty - self.penalty_factor*penalty
+			fitness = (1-self.penalty_factor)*certainty + self.penalty_factor*(1-penalty)
 		else:
 			fitness = certainty
 
@@ -116,19 +116,24 @@ class Population:
 
 	def steady_state_replace_one_offspring(self, offspring_pic: np.array):
 		min_fitness_idx = np.argmin(self.population_fitnesses)
+		max_fitness_idx = np.argmax(self.population_fitnesses)
 
 		offspring_penalty = self.penalty(offspring_pic)
 		offspring_certainty = self.certainty(offspring_pic)
 		offspring_fitness = self.fitness(offspring_certainty, offspring_penalty)
 
-		if offspring_fitness < self.population_fitnesses[min_fitness_idx]:
-			return False
-		else:
+		found_better_offspring = False
+
+		if round(float(offspring_fitness), 4) > round(self.population_fitnesses[max_fitness_idx], 4):
+			found_better_offspring = True
+
+		if offspring_fitness >= self.population_fitnesses[min_fitness_idx]:
 			self.population_pics[min_fitness_idx] = offspring_pic
 			self.population_certainties[min_fitness_idx] = offspring_certainty
 			self.population_penalties[min_fitness_idx] = offspring_penalty
 			self.population_fitnesses[min_fitness_idx] = offspring_fitness
-			return True
+
+		return found_better_offspring
 
 
 	def get_population_best(self):

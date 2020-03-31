@@ -6,9 +6,10 @@ from enum import Enum
 
 from models import MnistModel, FashionMnistModel, FashionMnistModel2, CatsDogsModel
 
-# The answer for everything :)
-np.random.seed(42)
-random.seed(42)
+# We want the same solution each time
+# 42- The answer for everything :)
+#np.random.seed(42)
+#random.seed(42)
 
 # Optimization Type
 class ALGORITHMS(Enum):
@@ -29,8 +30,8 @@ class CROSS_OVERS(Enum):
 
 # Mutations Properties
 class MUTATIONS(Enum):
-	UNIFORMAL_PER_GENE = 0					# Mutation for each gen in a specific probability
-	INDIVIDUAL_PER_OFFSPRING = 1			# Mutation for only one gen
+	UNIFORMAL = 0			# Mutation for each gene in a specific probability
+	INDIVIDUAL = 1			# Mutation for only one gene
 
 # Display Properties
 class DISPLAYS(Enum):
@@ -119,7 +120,7 @@ class Settings:
 
 		if self.algorithm_type == ALGORITHMS.GA:
 			settings_str += "_CrossOver=" + self.cross_over.name + "_Mutation=" + self.mutation.name + \
-							"_mutation_prob=" + str(self.mutation_probability) + "_Penalty=" + str(self.penalty_factor) + \
+							"_MutationProb=" + str(self.mutation_probability) + "_Penalty=" + str(self.penalty_factor) + \
 							"_PopulationSize=" + str(self.population_size) + "_Shades=" + str(self.num_of_shades)
 
 		settings_str += ".png"

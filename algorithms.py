@@ -25,6 +25,9 @@ class Algorithm:
 	def get_progress_status(self) -> str:
 		pass
 
+	def get_file_progress(self) -> str:
+		pass
+
 	def get_best_picture(self) -> np.array:
 		pass
 
@@ -101,9 +104,9 @@ class GeneticAlgorithm(Algorithm):
 
 	def random_mutations(self, offsprings: np.array):
 		for offspring_idx in range(len(offsprings)):
-			if self.settings.mutation == settingsModule.MUTATIONS.UNIFORMAL_PER_GENE:
+			if self.settings.mutation == settingsModule.MUTATIONS.UNIFORMAL:
 				offsprings[offspring_idx] = self.uniformal_mutation(offsprings[offspring_idx])
-			elif self.settings.mutation == settingsModule.MUTATIONS.INDIVIDUAL_PER_OFFSPRING:
+			elif self.settings.mutation == settingsModule.MUTATIONS.INDIVIDUAL:
 				offsprings[offspring_idx] = self.individual_mutation(offsprings[offspring_idx])
 			else:
 				print("Illegal Mutation!")
@@ -162,6 +165,12 @@ class GeneticAlgorithm(Algorithm):
 		status += ") | Worst(Fitness:{0:.4f})".format(round(self.get_population_wrost()['fitness'], 4))
 		return status
 
+	def get_file_progress(self):
+		return f"Iteration:{self.iteration_num}" + \
+			   ", Certainty:{0:.4f}".format(round(self.get_population_best()['certainty'], 4)) + \
+			   ", Penalty:{0:.4f}".format(round(self.get_population_best()['penalty'], 4)) + \
+			   ", Fitness:{0:.4f}".format(round(self.get_population_best()['fitness'], 4))
+
 	def get_best_picture(self):
 		return self.get_population_best()['pic']
 
@@ -169,7 +178,7 @@ class GeneticAlgorithm(Algorithm):
 		return self.get_population_best()['fitness']
 
 	def termination_condition(self):
-		return self.population.get_stuck_evolution_counter() >= 100 or self.get_population_best()['fitness'] >= 0.99
+		return self.population.get_stuck_evolution_counter() >= 10 * self.settings.status_period or self.get_population_best()['fitness'] >= 0.99
 
 
 # Greedy Algorithm
@@ -177,6 +186,8 @@ class GreedyAlgorithm(Algorithm):
 	pic: np.array
 	max_fitness: float
 	last_max_fitness: float
+	curr_i = 0
+	curr_j = 0
 
 	def __init__(self, settings: Settings):
 		super().__init__(settings)
@@ -185,20 +196,29 @@ class GreedyAlgorithm(Algorithm):
 				   / (self.settings.num_of_shades - 1)
 		self.max_fitness = self.certainty(self.pic)
 		self.last_max_fitness = 0.0
+		self.penalty_factor = settings.penalty_factor
 
 	def iterate(self):
-		for i in range(self.pic.shape[1]):
-			for j in range(self.pic.shape[2]):
-				max_fitness_shade = self.pic[0][i][j]
+		if self.curr_i >= self.pic.shape[1]:
+			self.curr_i = 0
 
-				for shade in range(self.settings.num_of_shades):
-					self.pic[0][i][j] = shade / (self.settings.num_of_shades - 1)
-					fitness = self.certainty(self.pic)
-					if fitness > self.max_fitness:
-						self.max_fitness = fitness
-						max_fitness_shade = shade / (self.settings.num_of_shades - 1)
+		if self.curr_j >= self.pic.shape[2]:
+			self.curr_j = 0
 
-				self.pic[0][i][j] = max_fitness_shade
+		max_fitness_shade = self.pic[0][self.curr_i][self.curr_j]
+
+		for shade in range(self.settings.num_of_shades):
+			#print(shade)
+			self.pic[0][self.curr_i][self.curr_j] = shade / (self.settings.num_of_shades - 1)
+			fitness = self.fitness(self.pic)
+			if fitness > self.max_fitness:
+				self.max_fitness = fitness
+				max_fitness_shade = shade / (self.settings.num_of_shades - 1)
+
+		self.pic[0][self.curr_i][self.curr_j] = max_fitness_shade
+
+		self.curr_i += 1
+		self.curr_j += 1
 
 	def certainty(self, pic: np.array):
 		with torch.no_grad():
@@ -207,6 +227,35 @@ class GreedyAlgorithm(Algorithm):
 			certainty = torch.nn.functional.softmax(network_output, dim=1)
 
 			return float(certainty[0][self.settings.label_num])
+
+	def penalty(self, pic: np.array):
+		# The penalty is defined by the distances between every two adjacent pixels in the picture
+		penalty = 0
+
+		# Avoiding penalty computation when possible
+		if self.penalty_factor != 0:
+			row_neighbors = np.copy(pic)
+			row_neighbors[:, 1:, :] = pic[:, :-1, :]
+
+			col_neighbors = np.copy(pic)
+			col_neighbors[:, :, 1:] = pic[:, :, :-1]
+
+			# penalty = np.sum(np.sqrt(np.abs(offspring - row_neighbors)) + np.sqrt(np.abs(offspring - col_neighbors)))
+			penalty = np.sum(np.abs(pic - row_neighbors) + np.abs(pic - col_neighbors))
+			penalty /= pow(self.settings.picture_size, 2)
+
+		return penalty
+
+	def fitness(self, pic):
+		if self.penalty_factor != 0:
+			certainty = self.certainty(pic)
+			penalty = self.penalty(pic)
+
+			fitness = (1-self.penalty_factor)*certainty + self.penalty_factor*(1-penalty)
+		else:
+			fitness = self.certainty(pic)
+
+		return fitness
 
 	def get_algorithm_name(self):
 		return "Greedy Algorithm"
@@ -219,6 +268,10 @@ class GreedyAlgorithm(Algorithm):
 		status = f"Algorithm:Greedy, Model:{self.settings.model.name}, Iteration:{self.iteration_num}, Label:{self.settings.label}" + \
 				 ", Fitness:{0:.4f}".format(round(self.max_fitness, 4))
 		return status
+
+	def get_file_progress(self):
+		return f"Iteration:{self.iteration_num}" + \
+			   ", Certainty:{0:.4f}".format(round(self.max_fitness, 4))
 
 	def get_best_picture(self):
 		return self.pic
